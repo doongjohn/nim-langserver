@@ -2,12 +2,26 @@ import std/[unicode, uri, strformat, os, strutils, options, json, jsonutils, sug
 import chronos, chronicles
 import "$nim/compiler/pathutils"
 import json_rpc/private/jrpc_sys
-
 type
   FingerTable = seq[tuple[u16pos, offset: int]]
 
   UriParseError* = object of Defect
     uri: string
+
+const
+  NIM_SCRIPT_API_TEMPLATE* = staticRead("templates/nimscriptapi.nim") #We add this file to nimsuggest and `nim check` to support nimble files
+
+
+proc writeStackTrace*(ex = getCurrentException()) =
+  try:
+    if ex != nil:
+      stderr.write "An exception occured \n"
+      stderr.write ex.msg & "\n"
+      stderr.write ex.getStackTrace()
+    else:
+      stderr.write getStackTrace()
+  except IOError:
+    discard
 
 proc createUTFMapping*(line: string): FingerTable =
   var pos = 0
@@ -155,17 +169,6 @@ proc catchOrQuit*(error: Exception) =
   else:
     fatal "Fatal exception reached", err = error.msg, stackTrace = getStackTrace()
     quit 1
-
-proc writeStackTrace*(ex = getCurrentException()) =
-  try:
-    if ex != nil:
-      stderr.write "An exception occured \n"
-      stderr.write ex.msg & "\n"
-      stderr.write ex.getStackTrace()
-    else:
-      stderr.write getStackTrace()
-  except IOError:
-    discard
 
 proc traceAsyncErrors*(fut: Future) =
   fut.addCallback do(data: pointer):
@@ -328,3 +331,12 @@ func isWord*(str: string): bool =
     if c.int notin 97 .. 122:
       return false
   return true
+
+proc getNimScriptAPITemplatePath*(): string =
+  result = getCacheDir("nimlangserver") 
+  createDir(result)
+  result = result / "nimscriptapi.nim"
+
+  if not result.fileExists:
+    writeFile(result, NIM_SCRIPT_API_TEMPLATE)
+  debug "NimScriptApiPath", path = result
